@@ -1,0 +1,28 @@
+id: beginner_teacher
+version: 1
+description: Teaching profile with explicit assumptions and gentler scaffolding
+style:
+  verbosity: verbose
+  tone: supportive
+  stance: teacher
+assumptions:
+  default_knowledge_level: beginner
+prompt_policies:
+  require_tradeoffs: false
+  forbid_handwavy_claims: true
+  require_explicit_output_contract: true
+constraints:
+  max_prompt_tokens: 5500
+  structure:
+    - goal
+    - prerequisites
+    - explanation_steps
+    - examples
+    - output_contract
+suitability_rules:
+  best_for: [explain, summarize]
+  avoid_for: []
+context_patterns:
+  - trusted_instruction_source_only
+  - explicit_delimiter_blocks
+  - ask_for_missing_prerequisites

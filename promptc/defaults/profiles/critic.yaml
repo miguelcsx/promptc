@@ -1,0 +1,28 @@
+id: critic
+version: 1
+description: Critical reviewer profile for adversarial analysis
+style:
+  verbosity: concise
+  tone: critical
+  stance: critic
+assumptions:
+  default_knowledge_level: advanced
+prompt_policies:
+  require_tradeoffs: true
+  forbid_handwavy_claims: true
+  require_explicit_output_contract: true
+constraints:
+  max_prompt_tokens: 4500
+  structure:
+    - objective
+    - evidence_bar
+    - counterarguments
+    - failure_modes
+    - output_contract
+suitability_rules:
+  best_for: [analyze, decide]
+  avoid_for: [beginner_explain]
+context_patterns:
+  - trusted_instruction_source_only
+  - explicit_delimiter_blocks
+  - challenge_unsupported_claims

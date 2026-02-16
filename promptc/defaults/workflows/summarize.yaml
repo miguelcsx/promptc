@@ -1,0 +1,114 @@
+id: summarize
+description: Build prompts for concise, faithful summaries
+signature_template: input_context, objective, constraints -> compiled_prompt, checks
+prompt_style: faithful_compression_contract
+prompt_directives:
+  - Open with a role definition as a precise, faithful summarizer
+  - Use semantic XML tags to organize sections (e.g., <source_scope>, <constraints>, <compression_rules>, <output_format>, <failure_policy>)
+  - Preserve source meaning and uncertainty without injecting new claims
+  - Define compression target and excluded content explicitly with measurable criteria
+  - Keep structure concise but traceable to source scope
+  - Require clear distinction between facts and inferred context
+  - Specify exact format expectations (bullet vs prose, max length, required sections)
+  - End with a testable output contract including fidelity checks
+  - Be dense and comprehensive — fill the token budget with actionable, specific guidance
+  - Do NOT wrap the entire prompt in <system> or <prompt> envelope tags
+quality_checklist:
+  - summary objective and scope boundaries are explicit
+  - ALL constraints come from the user's intent — no hallucinated policies or rules
+  - output format is NOT specified unless the user explicitly requested one
+  - no unsupported claims are introduced
+  - compression ratio or brevity target is stated only if the user specified one
+  - output contract reflects the user's actual success criteria
+  - role/identity is established in the opening lines
+clarification_policy:
+  - Ask for target audience and desired summary length when absent
+  - Ask whether to include caveats, risks, or action items when unclear
+ambiguity_resolution_rules:
+  - If source scope is unclear, ask for boundaries before final summary
+  - If format preference is unclear, default to concise structured bullets
+forbidden_patterns:
+  - etc
+  - maybe
+  - various
+  - single-message only
+  - exactly 3 rounds
+  - arbitrary word limit
+  - '[section]'
+  - '[[block]]'
+  - <system>
+friction_markers:
+  - in one message
+  - single user message
+  - maximum two rounds
+  - at most two
+  - up to three clarification rounds
+  - allow up to three clarification attempts
+  - interaction will end
+  - after two clarification attempts
+  - after three clarification attempts
+  - "≤\u202f2,000 words"
+  - 2,000 words per question
+  - cited directly after the statement
+  - in parentheses
+  - "[instruction_hierarchy]"
+  - "[input_boundary]"
+  - "[failure_policy]"
+  - "[output_contract]"
+  - "[final_self_check]"
+  - "[[instruction_hierarchy]]"
+  - "[[input_boundary]]"
+  - "[[failure_policy]]"
+  - "[[output_contract]]"
+  - "[[final_self_check]]"
+  - "<prompt>"
+  - "</system>"
+required_sections:
+  - goal
+  - source_scope
+  - compression_ratio
+  - exclusions
+  - output_contract
+required_prompt_blocks:
+  - instruction_hierarchy
+  - input_boundary
+  - failure_policy
+  - output_contract
+  - final_self_check
+required_technique_markers:
+  - objective
+  - constraints
+  - source scope
+  - compression
+  - output contract
+vague_markers:
+  - etc
+  - maybe
+  - something
+  - various
+  - and so on
+ambiguity_penalty_per_marker: 0.04
+ambiguity_penalty_cap: 0.35
+missing_sections_weight: 0.25
+missing_techniques_weight: 0.20
+eval_weights:
+  quality: 0.45
+  clarity: 0.3
+  constraint_fit: 0.15
+  brevity: 0.10
+judge_rubric:
+  priorities:
+    - prioritize faithfulness and scope control over verbosity
+    - penalize hallucinated details and omission of critical points
+  quality_checks:
+    - summary preserves core claims and key evidence
+    - compression ratio and exclusions are explicit
+  clarity_checks:
+    - output instructions are concise and scannable
+    - avoids repetitive paraphrasing
+  constraint_checks:
+    - source boundaries are explicit
+    - output contract is present and testable
+  risk_checks:
+    - flags unsupported additions
+    - flags under-specified scope boundaries

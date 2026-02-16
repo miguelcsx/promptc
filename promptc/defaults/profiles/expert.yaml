@@ -1,0 +1,28 @@
+id: expert
+version: 1
+description: Expert architect profile for high-signal prompt compilation
+style:
+  verbosity: concise
+  tone: direct
+  stance: architect
+assumptions:
+  default_knowledge_level: advanced
+prompt_policies:
+  require_tradeoffs: true
+  forbid_handwavy_claims: true
+  require_explicit_output_contract: true
+constraints:
+  max_prompt_tokens: 4500
+  structure:
+    - goal
+    - context
+    - method
+    - constraints
+    - output_contract
+suitability_rules:
+  best_for: [analyze, decide, compile]
+  avoid_for: []
+context_patterns:
+  - trusted_instruction_source_only
+  - explicit_delimiter_blocks
+  - abstain_on_missing_context

@@ -1,0 +1,116 @@
+id: decide
+description: Build prompts that compare options and recommend decisions
+signature_template: input_context, objective, constraints -> compiled_prompt, checks
+prompt_style: decision_contract
+prompt_directives:
+  - Open with a role definition as a structured decision analyst
+  - Use semantic XML tags to organize sections (e.g., <options>, <criteria>, <scoring_method>, <constraints>, <output_format>, <failure_policy>, <examples>)
+  - Enumerate feasible options before scoring — require explicit listing
+  - Use explicit decision criteria and weighting rules with concrete thresholds
+  - Require step-by-step chain-of-thought evaluation of each option against each criterion
+  - Require transparent recommendation logic and tie-break handling
+  - Separate objective evidence from assumptions, labeling each clearly
+  - End with a testable output contract defining the decision payload format
+  - Be dense and comprehensive — fill the token budget with actionable, specific guidance
+  - Do NOT wrap the entire prompt in <system> or <prompt> envelope tags
+quality_checklist:
+  - options are explicit and mutually distinguishable
+  - ALL constraints come from the user's intent — no hallucinated policies or rules
+  - output format is NOT specified unless the user explicitly requested one
+  - criteria and weighting are explicit and auditable
+  - evaluation uses chain-of-thought reasoning for each option
+  - recommendation rule is deterministic with clear tie-break logic
+  - output contract reflects the user's actual success criteria
+  - role/identity is established in the opening lines
+clarification_policy:
+  - Ask for missing criteria or priorities when they change outcomes
+  - Ask for hard constraints before final recommendation
+ambiguity_resolution_rules:
+  - If criteria are missing, infer baseline criteria and label assumptions clearly
+  - If constraints conflict, prioritize safety and user-stated hard constraints
+forbidden_patterns:
+  - maybe
+  - depends
+  - generally
+  - single-message only
+  - exactly 3 rounds
+  - arbitrary word limit
+  - '[section]'
+  - '[[block]]'
+  - <system>
+friction_markers:
+  - in one message
+  - single user message
+  - maximum two rounds
+  - at most two
+  - up to three clarification rounds
+  - allow up to three clarification attempts
+  - interaction will end
+  - after two clarification attempts
+  - after three clarification attempts
+  - "≤\u202f2,000 words"
+  - 2,000 words per question
+  - cited directly after the statement
+  - in parentheses
+  - "[instruction_hierarchy]"
+  - "[input_boundary]"
+  - "[failure_policy]"
+  - "[output_contract]"
+  - "[final_self_check]"
+  - "[[instruction_hierarchy]]"
+  - "[[input_boundary]]"
+  - "[[failure_policy]]"
+  - "[[output_contract]]"
+  - "[[final_self_check]]"
+  - "<prompt>"
+  - "</system>"
+required_sections:
+  - goal
+  - options
+  - decision_criteria
+  - scoring_method
+  - recommendation_rule
+  - output_contract
+required_prompt_blocks:
+  - instruction_hierarchy
+  - input_boundary
+  - failure_policy
+  - output_contract
+  - final_self_check
+required_technique_markers:
+  - objective
+  - constraints
+  - options
+  - criteria
+  - output contract
+vague_markers:
+  - maybe
+  - depends
+  - could be
+  - likely
+  - generally
+ambiguity_penalty_per_marker: 0.04
+ambiguity_penalty_cap: 0.35
+missing_sections_weight: 0.25
+missing_techniques_weight: 0.20
+eval_weights:
+  quality: 0.45
+  clarity: 0.25
+  constraint_fit: 0.2
+  brevity: 0.1
+judge_rubric:
+  priorities:
+    - enforce explicit criteria and scoring logic
+    - penalize recommendations without traceable rationale
+  quality_checks:
+    - options are compared with explicit criteria
+    - recommendation rule is deterministic and auditable
+  clarity_checks:
+    - decision flow is unambiguous
+    - avoids contradictory tie-break logic
+  constraint_checks:
+    - constraints are enforced in scoring and recommendation
+    - output contract defines decision payload clearly
+  risk_checks:
+    - flags unsupported recommendations
+    - flags missing decision criteria or weights

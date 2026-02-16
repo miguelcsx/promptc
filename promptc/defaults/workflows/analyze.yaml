@@ -1,0 +1,118 @@
+id: analyze
+description: Build prompts for structured analysis and tradeoff reasoning
+signature_template: input_context, objective, constraints -> compiled_prompt, checks
+prompt_style: structured_behavior_contract
+prompt_directives:
+  - Start with a clear role definition establishing analytical expertise
+  - State the mission objective and explicit scope boundaries upfront
+  - Use semantic XML tags to organize sections (e.g., <constraints>, <method>, <evidence_bar>, <output_format>, <failure_policy>, <examples>)
+  - Separate facts, assumptions, and unknowns so reasoning can be audited
+  - Include a step-by-step method with explicit chain-of-thought scaffolding
+  - Require evidence standards and cite specific thresholds, not vague qualifiers
+  - Include tradeoffs and decision-impacting uncertainties with concrete comparisons
+  - End with a testable output contract specifying format, required fields, and failure criteria
+  - Be dense and comprehensive — fill the token budget with actionable, specific guidance
+  - Do NOT wrap the entire prompt in <system> or <prompt> envelope tags
+quality_checklist:
+  - objective is concrete, outcome-oriented, and verifiable by a third party
+  - ALL constraints come from the user's intent — no hallucinated policies or rules
+  - output format is NOT specified unless the user explicitly requested one
+  - knowledge level from intent is deeply honored (if 'assume no knowledge', every term explained from basics)
+  - assumptions are explicit when context is incomplete
+  - method is sequenced with chain-of-thought reasoning steps
+  - instructions use measurable criteria from the intent, not invented thresholds
+  - output contract reflects the user's actual success criteria
+  - role/identity is established in the opening lines
+clarification_policy:
+  - Ask only for missing details that materially change the analysis result
+  - If critical details are missing, ask targeted clarification questions before finalizing
+ambiguity_resolution_rules:
+  - If ambiguity is low-risk, proceed with explicit assumptions
+  - If ambiguity changes recommendations materially, request clarification first
+forbidden_patterns:
+  - etc
+  - as needed
+  - single-message only
+  - exactly 3 rounds
+  - arbitrary word limit
+  - forced citation format
+  - '[section]'
+  - '[[block]]'
+  - <system>
+friction_markers:
+  - in one message
+  - single user message
+  - maximum two rounds
+  - at most two
+  - up to three clarification rounds
+  - allow up to three clarification attempts
+  - interaction will end
+  - after two clarification attempts
+  - after three clarification attempts
+  - "≤\u202f2,000 words"
+  - 2,000 words per question
+  - cited directly after the statement
+  - in parentheses
+  - "[instruction_hierarchy]"
+  - "[input_boundary]"
+  - "[failure_policy]"
+  - "[output_contract]"
+  - "[final_self_check]"
+  - "[[instruction_hierarchy]]"
+  - "[[input_boundary]]"
+  - "[[failure_policy]]"
+  - "[[output_contract]]"
+  - "[[final_self_check]]"
+  - "<prompt>"
+  - "</system>"
+required_sections:
+  - goal
+  - knowns
+  - unknowns
+  - method
+  - evidence_bar
+  - tradeoffs
+  - output_contract
+required_prompt_blocks:
+  - instruction_hierarchy
+  - input_boundary
+  - failure_policy
+  - output_contract
+  - final_self_check
+required_technique_markers:
+  - objective
+  - constraints
+  - method
+  - evidence
+  - output contract
+vague_markers:
+  - etc
+  - as needed
+  - maybe
+  - could be
+  - various
+ambiguity_penalty_per_marker: 0.04
+ambiguity_penalty_cap: 0.35
+missing_sections_weight: 0.25
+missing_techniques_weight: 0.20
+eval_weights:
+  quality: 0.45
+  clarity: 0.25
+  constraint_fit: 0.2
+  brevity: 0.1
+judge_rubric:
+  priorities:
+    - enforce method and evidence requirements before style
+    - penalize missing tradeoffs and weak assumptions
+  quality_checks:
+    - states explicit objective and analysis method
+    - includes evidence standards and tradeoff handling
+  clarity_checks:
+    - avoids vague qualifiers and ambiguous scope
+    - instructions are structured and non-redundant
+  constraint_checks:
+    - preserves hard constraints and output contract
+    - includes required sections from workflow
+  risk_checks:
+    - flags unsupported claims
+    - flags missing decision-critical context

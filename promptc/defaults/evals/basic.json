@@ -1,0 +1,20 @@
+[
+  {
+    "intention": "I want to analyze migration risks",
+    "raw_context": "current monolith, zero downtime required",
+    "workflow": "analyze",
+    "profile": "expert",
+    "required_terms": ["output contract", "tradeoffs"],
+    "expected_sections": ["goal", "method"],
+    "min_score": 0.55
+  },
+  {
+    "intention": "I want to explain this architecture to juniors",
+    "raw_context": "event-driven services",
+    "workflow": "explain",
+    "profile": "beginner_teacher",
+    "required_terms": ["goal", "examples", "output contract"],
+    "expected_sections": ["goal", "explanation_method"],
+    "min_score": 0.55
+  }
+]

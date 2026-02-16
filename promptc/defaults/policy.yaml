@@ -1,0 +1,25 @@
+search:
+  improve_epsilon: 0.001
+  plateau_patience: 2
+  score_precision: 4
+  weight_sum_tolerance: 0.001
+  eval_weight_target: 1.0
+  default_artifact_list_limit: 20
+  max_artifact_list_limit: 200
+  max_variants: 8
+  max_iters: 10
+
+profile:
+  min_prompt_tokens: 800
+
+evaluation:
+  variability_penalty_cap: 0.15
+  variability_penalty_scale: 0.5
+  score_floor: 0.0
+  score_ceiling: 1.0
+  round_digits: 4
+
+optimizer_metric:
+  non_empty_weight: 0.4
+  required_terms_weight: 0.6
+  output_contract_bonus: 0.3

@@ -1,0 +1,117 @@
+id: explain
+description: Build prompts that produce high-quality explanations
+signature_template: input_context, objective, constraints -> compiled_prompt, checks
+prompt_style: pedagogical_behavior_contract
+prompt_directives:
+  - Open with a role definition as a patient, knowledgeable teacher
+  - Define audience level explicitly and forbid hidden prerequisites
+  - Use semantic XML tags to organize sections (e.g., <prerequisites>, <explanation_steps>, <examples>, <output_format>, <failure_policy>)
+  - Explain concepts in progressive layers from fundamentals to details (progressive disclosure)
+  - Include concrete examples inside <examples> tags and quick checks to confirm understanding after each major concept
+  - Require step-by-step breakdowns for complex topics with explicit transitions between steps
+  - Prefer plain, concrete language over abstract jargon — define every term before using it
+  - End with a testable output contract specifying structure, depth, and what a good explanation looks like
+  - Be dense and comprehensive — fill the token budget with actionable, specific guidance
+  - Do NOT wrap the entire prompt in <system> or <prompt> envelope tags
+quality_checklist:
+  - objective and learner level are explicit
+  - ALL constraints come from the user's intent — no hallucinated policies or rules
+  - output format is NOT specified unless the user explicitly requested one
+  - knowledge level from intent is deeply honored (if 'assume no knowledge', every term explained from basics)
+  - each key term is defined before use in everyday language
+  - explanation follows progressive disclosure — simple concepts first, complexity builds
+  - examples are concrete, relevant, and grounded in the learner's context
+  - output contract reflects the user's actual success criteria
+  - role/identity is established in the opening lines
+clarification_policy:
+  - Ask for learner level or prior knowledge only when missing and relevant
+  - Ask for domain context if it changes terminology or examples
+ambiguity_resolution_rules:
+  - Default to beginner-safe assumptions when level is unknown
+  - Surface assumptions explicitly before giving advanced steps
+forbidden_patterns:
+  - etc
+  - kind of
+  - roughly
+  - single-message only
+  - exactly 3 rounds
+  - arbitrary word limit
+  - '[section]'
+  - '[[block]]'
+  - <system>
+friction_markers:
+  - in one message
+  - single user message
+  - maximum two rounds
+  - at most two
+  - up to three clarification rounds
+  - allow up to three clarification attempts
+  - interaction will end
+  - after two clarification attempts
+  - after three clarification attempts
+  - "≤\u202f2,000 words"
+  - 2,000 words per question
+  - cited directly after the statement
+  - in parentheses
+  - "[instruction_hierarchy]"
+  - "[input_boundary]"
+  - "[failure_policy]"
+  - "[output_contract]"
+  - "[final_self_check]"
+  - "[[instruction_hierarchy]]"
+  - "[[input_boundary]]"
+  - "[[failure_policy]]"
+  - "[[output_contract]]"
+  - "[[final_self_check]]"
+  - "<prompt>"
+  - "</system>"
+required_sections:
+  - goal
+  - knowns
+  - unknowns
+  - explanation_method
+  - examples
+  - output_contract
+required_prompt_blocks:
+  - instruction_hierarchy
+  - input_boundary
+  - failure_policy
+  - output_contract
+  - final_self_check
+required_technique_markers:
+  - objective
+  - constraints
+  - explanation
+  - examples
+  - output contract
+vague_markers:
+  - etc
+  - kind of
+  - maybe
+  - roughly
+  - some
+ambiguity_penalty_per_marker: 0.04
+ambiguity_penalty_cap: 0.35
+missing_sections_weight: 0.25
+missing_techniques_weight: 0.20
+eval_weights:
+  quality: 0.4
+  clarity: 0.35
+  constraint_fit: 0.15
+  brevity: 0.10
+judge_rubric:
+  priorities:
+    - prioritize pedagogical sequence and prerequisite handling
+    - penalize missing examples or unexplained jargon
+  quality_checks:
+    - explanation path is coherent and level-appropriate
+    - includes concrete examples and expected outputs
+  clarity_checks:
+    - terms are defined before use
+    - avoids abrupt jumps and overloaded instructions
+  constraint_checks:
+    - respects target audience assumptions and constraints
+    - includes explicit output contract
+  risk_checks:
+    - flags unexplained advanced terminology
+    - flags hidden prerequisites
