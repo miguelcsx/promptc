@@ -8,7 +8,7 @@ import typer
 import yaml
 
 from promptc.compiler import CompilerService, load_context_value
-from promptc.config import load_policy_config, load_runtime_config
+from promptc.config import GLOBAL_ROOT, load_policy_config, load_runtime_config
 from promptc.dspy.lm import build_dspy_lm, configure_dspy_lm
 from promptc.dspy.programs import PromptCompilerProgram
 from promptc.engines.dspy_optimize import DSPyOptimizeEngine
@@ -24,12 +24,17 @@ from promptc.storage.fs import (
     FsArtifactRepo,
     FsCacheRepo,
     FsCalibrationRepo,
+    FsLayeredProfileRepo,
+    FsLayeredWorkflowRepo,
     FsProfileRepo,
     FsSignatureRepo,
     FsWorkflowRepo,
 )
 
-app = typer.Typer(help="promptc: local DSPy-based prompt compiler")
+app = typer.Typer(
+    help="promptc: local DSPy-based prompt compiler",
+    invoke_without_command=True,
+)
 profile_app = typer.Typer(help="manage cognitive profiles")
 workflow_app = typer.Typer(help="manage workflows")
 artifact_app = typer.Typer(help="inspect compiled artifacts")
@@ -39,6 +44,34 @@ app.add_typer(profile_app, name="profile")
 app.add_typer(workflow_app, name="workflow")
 app.add_typer(artifact_app, name="artifact")
 app.add_typer(eval_app, name="eval")
+
+
+@app.callback()
+def _app_callback(
+    ctx: typer.Context,
+    workflow: Optional[str] = typer.Option(None, "--workflow", "-w", help="Workflow id"),
+    profile: Optional[str] = typer.Option(None, "--profile", "-p", help="Profile id"),
+    output: Optional[OutputFormat] = typer.Option(None, "--output", "-o", help="Output format"),
+    model: Optional[str] = typer.Option(None, "--model", "-m", help="Model id"),
+    provider: Optional[str] = typer.Option(None, "--provider", help="Provider name"),
+    project_root: Path = typer.Option(Path(".promptc"), help="Project storage root"),
+) -> None:
+    """Start the interactive REPL when called with no sub-command."""
+    if ctx.invoked_subcommand is not None:
+        return  # Delegate to the sub-command
+
+    from promptc.repl import run_repl
+
+    _ensure_defaults(project_root)
+    runtime = load_runtime_config(project_root, {"provider": provider, "model": model})
+
+    run_repl(
+        project_root=project_root,
+        profile_id=profile or runtime.default_profile_id,
+        workflow_id=workflow or runtime.default_workflow_id,
+        output_format=output or runtime.default_output_format,
+        overrides={k: v for k, v in {"provider": provider, "model": model}.items() if v},
+    )
 
 
 def service_profile_seed(profile_id: str, description: str):
@@ -113,10 +146,22 @@ def service_workflow_seed(workflow_id: str, description: str, signature_template
 
 
 def _ensure_defaults(project_root: Path) -> None:
+    """Seed *project_root* with system defaults when files are missing.
+
+    Also ensures the user-global root (~/.promptc) is seeded once, so profiles
+    and workflows defined there are available to every project.
+    """
+    _seed_root(project_root)
+    # Seed the global root as well (no-op if already seeded).
+    if project_root.resolve() != GLOBAL_ROOT.resolve():
+        _seed_root(GLOBAL_ROOT)
+
+
+def _seed_root(root: Path) -> None:
     defaults_root = Path(__file__).parent / "defaults"
     for folder in ["profiles", "workflows", "evals"]:
         src = defaults_root / folder
-        dst = project_root / folder
+        dst = root / folder
         dst.mkdir(parents=True, exist_ok=True)
         for f in src.glob("*"):
             if not f.is_file():
@@ -128,10 +173,10 @@ def _ensure_defaults(project_root: Path) -> None:
                 _merge_yaml_defaults(defaults_path=f, target_path=out)
 
     for folder in ["artifacts", "signatures", "cache", "calibrations"]:
-        (project_root / folder).mkdir(parents=True, exist_ok=True)
+        (root / folder).mkdir(parents=True, exist_ok=True)
 
     policy_src = defaults_root / "policy.yaml"
-    policy_dst = project_root / "policy.yaml"
+    policy_dst = root / "policy.yaml"
     if not policy_dst.exists():
         policy_dst.write_text(policy_src.read_text())
     else:
@@ -146,6 +191,18 @@ def _merge_yaml_defaults(defaults_path: Path, target_path: Path) -> None:
     merged = _deep_merge(defaults, current)
     if merged != current:
         target_path.write_text(yaml.safe_dump(merged, sort_keys=False))
+
+
+def _unique_paths(paths: list[Path]) -> list[Path]:
+    """Deduplicate paths while preserving order."""
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for p in paths:
+        resolved = p.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            out.append(p)
+    return out
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -183,9 +240,13 @@ def _build_service(
     role_lms = _build_role_lms(runtime)
     program = PromptCompilerProgram(max_retries=runtime.max_retries, role_lms=role_lms)
 
+    # Asset lookup: project-local first, then user-global, for profiles/workflows.
+    profile_roots = _unique_paths([project_root / "profiles", GLOBAL_ROOT / "profiles"])
+    workflow_roots = _unique_paths([project_root / "workflows", GLOBAL_ROOT / "workflows"])
+
     return CompilerService(
-        profile_repo=FsProfileRepo(project_root / "profiles"),
-        workflow_repo=FsWorkflowRepo(project_root / "workflows"),
+        profile_repo=FsLayeredProfileRepo(profile_roots),
+        workflow_repo=FsLayeredWorkflowRepo(workflow_roots),
         signature_repo=FsSignatureRepo(project_root / "signatures"),
         artifact_repo=FsArtifactRepo(project_root / "artifacts"),
         cache_repo=FsCacheRepo(project_root / "cache"),

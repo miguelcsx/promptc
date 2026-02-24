@@ -13,6 +13,7 @@ dependencies = [
   "pydantic>=2.7.0",
   "PyYAML>=6.0.1",
   "dspy-ai>=2.5.0",
+  "prompt_toolkit>=3.0.0",
 ]
 
 [dependency-groups]

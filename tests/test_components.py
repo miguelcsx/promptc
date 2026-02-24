@@ -57,7 +57,9 @@ def test_renderer_formats() -> None:
     schema = r.render(base, OutputFormat.JSON_SCHEMA)
 
     assert plain.startswith("Goal")
-    assert "<|start|>system" in chatml
+    assert "<|im_start|>system" in chatml
+    assert "Goal" in chatml
+    assert "You are a capable AI assistant" not in chatml
     assert '"instruction"' in schema
 
 

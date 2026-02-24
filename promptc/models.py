@@ -207,7 +207,7 @@ class WorkflowConfig(BaseModel):
     forbidden_patterns: list[str] = Field(default_factory=list)
     friction_markers: list[str] = Field(default_factory=list)
     required_sections: list[str] = Field(default_factory=list)
-    required_prompt_blocks: list[str]
+    required_prompt_blocks: list[str] = Field(default_factory=list)
     required_technique_markers: list[str] = Field(default_factory=list)
     vague_markers: list[str] = Field(default_factory=list)
     ambiguity_penalty_per_marker: float = 0.04
@@ -216,21 +216,15 @@ class WorkflowConfig(BaseModel):
     missing_techniques_weight: float = 0.2
     eval_weights: WorkflowEvalWeights = Field(default_factory=WorkflowEvalWeights)
     judge_rubric: WorkflowJudgeRubric = Field(default_factory=WorkflowJudgeRubric)
+    # Per-workflow guidance injected into the compiler/refiner LLM calls.
+    # When non-empty, replaces the default universal principles.
+    compiler_principles: str = ""
+    refine_principles: str = ""
 
     @field_validator("required_prompt_blocks")
     @classmethod
     def _validate_required_prompt_blocks(cls, value: list[str]) -> list[str]:
-        normalized = [v.strip().lower() for v in value if v and v.strip()]
-        if not normalized:
-            raise ValueError("required_prompt_blocks must not be empty")
-        missing = [
-            block for block in CANONICAL_PROMPT_BLOCKS if block not in normalized
-        ]
-        if missing:
-            raise ValueError(
-                f"required_prompt_blocks missing canonical blocks: {missing}"
-            )
-        return normalized
+        return [v.strip().lower() for v in value if v and v.strip()]
 
     @field_validator("required_technique_markers")
     @classmethod

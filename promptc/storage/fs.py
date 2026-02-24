@@ -293,6 +293,61 @@ class FsCacheRepo(CacheRepo):
         return normalized
 
 
+class FsLayeredProfileRepo(ProfileRepo):
+    """Searches a prioritised list of roots; writes go to the first root."""
+
+    def __init__(self, roots: list[Path]) -> None:
+        self._repos = [FsProfileRepo(r) for r in roots]
+
+    def get(self, profile_id: str) -> CognitiveProfile:
+        for repo in self._repos:
+            try:
+                return repo.get(profile_id)
+            except FileNotFoundError:
+                continue
+        raise FileNotFoundError(f"Profile not found: {profile_id!r}")
+
+    def put(self, profile: CognitiveProfile) -> None:
+        self._repos[0].put(profile)
+
+    def list_ids(self) -> list[str]:
+        ids: set[str] = set()
+        for repo in self._repos:
+            ids.update(repo.list_ids())
+        return sorted(ids)
+
+    def list_versions(self, profile_id: str) -> list[int]:
+        for repo in self._repos:
+            versions = repo.list_versions(profile_id)
+            if versions:
+                return versions
+        return []
+
+
+class FsLayeredWorkflowRepo(WorkflowRepo):
+    """Searches a prioritised list of roots; writes go to the first root."""
+
+    def __init__(self, roots: list[Path]) -> None:
+        self._repos = [FsWorkflowRepo(r) for r in roots]
+
+    def get(self, workflow_id: str) -> WorkflowConfig:
+        for repo in self._repos:
+            try:
+                return repo.get(workflow_id)
+            except FileNotFoundError:
+                continue
+        raise FileNotFoundError(f"Workflow not found: {workflow_id!r}")
+
+    def put(self, workflow: WorkflowConfig) -> None:
+        self._repos[0].put(workflow)
+
+    def list_ids(self) -> list[str]:
+        ids: set[str] = set()
+        for repo in self._repos:
+            ids.update(repo.list_ids())
+        return sorted(ids)
+
+
 class FsCalibrationRepo(CalibrationRepo):
     def __init__(self, root: Path):
         self.root = root

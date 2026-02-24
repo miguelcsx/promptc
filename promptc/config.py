@@ -6,30 +6,53 @@ import yaml
 
 from promptc.models import PolicyConfig, RuntimeConfig
 
+# ~/.promptc is the user-global root; per-project roots are usually ./.promptc
+GLOBAL_ROOT: Path = Path.home() / ".promptc"
+
 
 def load_runtime_config(
     project_root: Path, overrides: dict[str, object] | None = None
 ) -> RuntimeConfig:
-    cfg_path = project_root / "config.yaml"
-    base: dict[str, object] = {}
-    if cfg_path.exists():
-        data = yaml.safe_load(cfg_path.read_text()) or {}
-        if isinstance(data, dict):
-            base = data
+    """Load RuntimeConfig with a four-layer precedence:
 
-    merged = dict(base)
+    1. Global defaults  (~/.promptc/config.yaml)
+    2. Project config   (<project_root>/config.yaml)
+    3. Local overrides  (<project_root>/config.local.yaml)  — gitignored
+    4. CLI overrides    (the ``overrides`` dict)
+    """
+    base: dict[str, object] = {}
+
+    for cfg_path in [
+        GLOBAL_ROOT / "config.yaml",
+        project_root / "config.yaml",
+        project_root / "config.local.yaml",
+    ]:
+        layer = _load_yaml_dict(cfg_path)
+        base.update(layer)
+
     if overrides:
         for k, v in overrides.items():
             if v is not None:
-                merged[k] = v
-    return RuntimeConfig.model_validate(merged)
+                base[k] = v
+
+    return RuntimeConfig.model_validate(base)
 
 
 def load_policy_config(project_root: Path) -> PolicyConfig:
-    path = project_root / "policy.yaml"
+    """Load policy, preferring project-local over global."""
+    for path in [project_root / "policy.yaml", GLOBAL_ROOT / "policy.yaml"]:
+        if path.exists():
+            data = yaml.safe_load(path.read_text()) or {}
+            if not isinstance(data, dict):
+                raise ValueError(f"policy.yaml must be a mapping: {path}")
+            return PolicyConfig.model_validate(data)
+    raise FileNotFoundError(
+        f"Missing policy config in {project_root} and {GLOBAL_ROOT}"
+    )
+
+
+def _load_yaml_dict(path: Path) -> dict[str, object]:
     if not path.exists():
-        raise FileNotFoundError(f"Missing policy config: {path}")
+        return {}
     data = yaml.safe_load(path.read_text()) or {}
-    if not isinstance(data, dict):
-        raise ValueError("policy.yaml must be a mapping")
-    return PolicyConfig.model_validate(data)
+    return data if isinstance(data, dict) else {}

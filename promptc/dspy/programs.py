@@ -395,78 +395,49 @@ def _compiler_guidance_text(output_format: str, workflow_json: str) -> str:
         ambiguity_rules=ambiguity_rules,
         forbidden_patterns=forbidden_patterns,
     )
+
+    # Per-workflow principles override the universal fallback when provided.
+    principles = str(workflow.get("compiler_principles", "")).strip()
+    if not principles:
+        principles = _universal_compiler_principles()
+
+    output_rules = (
+        "## Output Rules\n\n"
+        "- Output the prompt text ONLY — no commentary, no wrapper.\n"
+        "- Do NOT wrap the output in `<system>`, `<prompt>`, or envelope tags. "
+        "The rendering layer handles framing; your output IS the prompt content directly.\n"
+        f"- Target format: `{output_format}`.\n"
+    )
+
+    return f"{principles}\n\n{output_rules}\n## Workflow Context\n\n{workflow_guidance}"
+
+
+def _universal_compiler_principles() -> str:
+    """Minimal fallback principles used when a workflow does not define its own."""
     return (
         "You are an expert prompt engineer. Generate a single, production-quality "
         "system prompt that functions as a complete behavior contract.\n\n"
         "## Core Principles\n\n"
-        "1. **Role & Identity**: Open with a clear role definition that establishes "
-        "who the AI is and what domain expertise it brings. A strong identity anchors "
-        "all downstream behavior.\n"
-        "2. **Constraint Fidelity**: ONLY include constraints, rules, and policies that "
-        "are explicitly stated or directly implied by the user's intent and outcome spec. "
-        "NEVER invent platform policies (e.g., 'OpenAI policy', 'academic dishonesty'), "
-        "safety restrictions, word limits, citation rules, formatting requirements, or "
-        "behavioral restrictions that are not present in the outcome spec. If the user "
-        "didn't ask for it, don't add it. The prompt must faithfully represent the user's "
-        "actual intent, not what you think they should want.\n"
-        "3. **Format Agnosticism**: Do NOT specify output format (LaTeX, Markdown, JSON, "
-        "plain text, etc.) unless the user's intent or constraints EXPLICITLY request a "
-        "specific format. Let the AI choose the best presentation for the task. Do not "
-        "prescribe word counts, section counts, or structural templates unless the user "
-        "asked for them.\n"
-        "4. **Honor Knowledge Level Deeply**: When the intent says 'explain from scratch', "
-        "'assume I know nothing', or similar, this is a HARD constraint. It means: every "
-        "single concept must be explained from absolute basics using everyday language. "
-        "Do not use ANY technical term without first explaining it as if to someone who "
-        "has never encountered it. Do not assume familiarity with ANY domain vocabulary. "
-        "Build understanding layer by layer from zero.\n"
-        "5. **Specificity Over Vagueness**: Every instruction must be concrete and "
-        "actionable. Replace qualifiers like 'thorough' or 'detailed' with measurable "
-        "criteria (e.g., 'cover at least 3 distinct failure modes', 'compare minimum "
-        "2 alternatives'). Use exact thresholds where they come from the intent.\n"
-        "6. **Structured Decomposition**: Break the prompt into clearly labeled sections. "
-        "Use Markdown headings (##, ###) for top-level organization AND semantic XML tags "
-        "to delimit functional blocks (e.g., `<constraints>`, `<examples>`, "
-        "`<reasoning_steps>`, `<failure_policy>`, `<context>`). This mirrors how "
-        "production system prompts organize dense instruction sets. Never use bracket-style "
-        "pseudo-markup like [Section] or [[block]].\n"
-        "7. **Chain-of-Thought Scaffolding**: For tasks requiring reasoning, embed "
-        "explicit step-by-step methodology. Tell the model what to think about and in "
-        "what order, not just what to output.\n"
-        "8. **Instruction Hierarchy**: Place the most critical behavioral rules first. "
-        "Mark non-negotiable constraints with IMPORTANT or CRITICAL. Less critical "
-        "preferences go later.\n"
-        "9. **Positive Then Negative Framing**: State what to do (primary behavior), "
-        "then what to avoid (guardrails). Lead with desired behavior, not prohibitions.\n"
-        "10. **Output Contract**: End with success/failure criteria that are testable "
-        "against the user's actual intent. Do not over-specify format unless requested.\n"
-        "11. **Context Boundaries**: Use clear delimiters (XML tags or Markdown sections) "
-        "to separate system instructions from user-provided input.\n"
-        "12. **Few-Shot When Valuable**: When the task benefits from demonstration, "
-        "include 1-2 concrete input/output examples inside an `<examples>` tag.\n"
-        "13. **No Friction Unless Requested**: Do not invent procedural gates, "
-        "format requirements, word limits, or citation styles not in the intent.\n\n"
-        "## Quality Bar\n\n"
-        "The generated prompt should rival the density of production system prompts. "
-        "Be comprehensive — fill the token budget with actionable, specific instructions "
-        "that faithfully serve the user's intent. Every sentence must do work. But density "
-        "means depth on WHAT THE USER ASKED FOR, not inventing extra rules they didn't.\n\n"
-        "## XML Tag Usage\n\n"
-        "Use semantic XML tags (snake_case) to organize prompt sections. Good tags include:\n"
-        "- `<role>` — identity and expertise\n"
-        "- `<constraints>` — hard behavioral rules FROM the intent\n"
-        "- `<method>` or `<reasoning_steps>` — chain-of-thought scaffold\n"
-        "- `<examples>` — few-shot demonstrations\n"
-        "- `<failure_policy>` — what to do when constraints can't be met\n"
-        "- `<context>` — background information or assumptions\n"
-        "- `<guardrails>` — safety and boundary rules FROM the intent\n"
-        "Tags should wrap content, not replace headings. Combine with Markdown headings.\n\n"
-        "## CRITICAL Output Rules\n\n"
-        "- Output the prompt text ONLY — no commentary, no wrapper.\n"
-        "- Do NOT wrap the output in `<system>`, `<prompt>`, or similar envelope tags. "
-        "The rendering layer handles framing. Your output IS the prompt content directly.\n"
-        f"- Target format: `{output_format}`.\n\n"
-        f"## Workflow Context\n\n{workflow_guidance}"
+        "1. **Role & Identity**: Open with a specific role definition anchoring domain expertise.\n"
+        "2. **Constraint Fidelity**: Include ONLY constraints from the user's intent. "
+        "Never invent platform policies, safety rules, word limits, or citation formats "
+        "not in the outcome spec.\n"
+        "3. **Format Agnosticism**: Do NOT specify output format unless the intent explicitly "
+        "requests one. Let the AI choose the best presentation.\n"
+        "4. **Specificity**: Replace qualifiers like 'thorough' with measurable criteria. "
+        "Use exact thresholds from the intent.\n"
+        "5. **Chain-of-Thought**: For reasoning tasks, embed step-by-step methodology — "
+        "tell the model what to think about and in what order.\n"
+        "6. **Adaptive Structure**: Use Markdown headings or semantic XML tags for sections. "
+        "Pick whichever style fits the task; avoid duplicating both for the same section. "
+        "Never use bracket pseudo-markup like [Section] or [[block]].\n"
+        "7. **Output Contract**: End with testable success/failure criteria tied to the "
+        "user's actual intent.\n"
+        "8. **No Friction**: Do not invent procedural gates, format requirements, or "
+        "citation styles not in the intent.\n\n"
+        "## Quality Standard\n\n"
+        "Every sentence must do work. Be dense with actionable, task-specific instructions. "
+        "Depth on what the user asked for — never pad with generic advice."
     )
 
 
@@ -512,43 +483,44 @@ def _refine_guidance_text(workflow_json: str, output_format: str) -> str:
     quality_checklist = _as_clean_list(workflow.get("quality_checklist", []))
     forbidden_patterns = _as_clean_list(workflow.get("forbidden_patterns", []))
     required_sections = _as_clean_list(workflow.get("required_sections", []))
-    return (
-        "You are refining an existing prompt candidate. Apply surgical, targeted "
-        "improvements — do not rewrite from scratch.\n\n"
-        "## Refinement Protocol\n\n"
-        "1. **Diagnose First**: Read the judge feedback and deterministic penalties "
-        "carefully. Identify the 2-3 highest-impact weaknesses.\n"
-        "2. **Preserve What Works**: Keep sections that scored well. Only modify "
-        "what the feedback specifically criticizes.\n"
-        "3. **Priority Order**: Fix constraint violations first, then clarity issues, "
-        "then quality/depth improvements. Never sacrifice correctness for style.\n"
-        "4. **Strip Hallucinated Constraints**: Remove any constraint, policy, or rule "
-        "that is NOT present in the outcome spec or user intent. Common hallucinations: "
-        "platform policies ('OpenAI policy', 'academic dishonesty'), invented word limits, "
-        "forced citation formats, format requirements the user didn't request. If the user "
-        "didn't ask for it, remove it.\n"
-        "5. **Fix Format Over-Specification**: If the prompt prescribes output format "
-        "(LaTeX, Markdown, JSON, word counts, section templates) but the user's intent "
-        "didn't request a specific format, remove those prescriptions. Let the AI choose.\n"
-        "6. **Honor Knowledge Level**: If the intent says 'assume no knowledge' or similar, "
-        "verify EVERY technical term in the prompt is explained from absolute basics. "
-        "If the prompt uses domain jargon without everyday-language definitions, fix it.\n"
-        "7. **Technique Checklist**: Verify the refined prompt covers:\n"
-        "   - Clear role/identity definition\n"
-        "   - Specific, measurable instructions from the actual intent\n"
-        "   - Step-by-step reasoning structure where appropriate\n"
-        "   - Output contract tied to the user's actual success criteria\n"
-        "   - Semantic XML tags for structural organization\n"
-        "8. **Remove Friction**: Strip invented procedural gates not in the intent.\n"
-        "9. **Remove Bracket Markup**: Replace bracket-style tags ([Section], [[block]]) "
-        "with Markdown headings or semantic XML tags. Keep proper XML tags.\n"
-        "10. **Remove Envelope Tags**: Strip `<system>`, `<prompt>` envelope wrappers.\n\n"
+
+    # Per-workflow refine principles override the universal fallback when provided.
+    principles = str(workflow.get("refine_principles", "")).strip()
+    if not principles:
+        principles = _universal_refine_principles()
+
+    constraints = (
         f"## Constraints\n\n"
         f"- Required sections: {_join_items(required_sections)}\n"
         f"- Workflow directives: {_join_items(prompt_directives)}\n"
         f"- Quality checklist: {_join_items(quality_checklist)}\n"
         f"- Forbidden patterns: {_join_items(forbidden_patterns)}\n"
         f"- Output format: `{output_format}` | Workflow: `{workflow_id}`"
+    )
+    return f"{principles}\n\n{constraints}"
+
+
+def _universal_refine_principles() -> str:
+    """Minimal fallback refinement protocol used when a workflow does not define its own."""
+    return (
+        "You are refining an existing prompt candidate. Apply surgical, targeted "
+        "improvements — do not rewrite from scratch.\n\n"
+        "## Refinement Protocol\n\n"
+        "1. **Diagnose First**: Identify the 2-3 highest-impact weaknesses from judge "
+        "feedback and deterministic penalties.\n"
+        "2. **Preserve What Works**: Keep sections that scored well. Only modify what "
+        "feedback specifically criticizes.\n"
+        "3. **Priority Order**: Constraint violations → clarity issues → depth improvements. "
+        "Never sacrifice correctness for style.\n"
+        "4. **Strip Hallucinations**: Remove any constraint, policy, or rule NOT in the "
+        "outcome spec. Common hallucinations: platform policies, invented word limits, "
+        "forced citation formats, format requirements not in the intent.\n"
+        "5. **Technique Completeness**: Verify the refined prompt has a clear role "
+        "definition, specific measurable instructions, reasoning structure where needed, "
+        "and an output contract tied to the user's actual success criteria.\n"
+        "6. **Remove Structural Noise**: Replace bracket markup ([Section], [[block]]) "
+        "with Markdown headings or semantic XML tags. Strip `<system>`/`<prompt>` wrappers. "
+        "Remove invented procedural gates not in the intent."
     )
 
 
