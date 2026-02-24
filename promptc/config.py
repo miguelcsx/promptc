@@ -51,6 +51,20 @@ def load_policy_config(project_root: Path) -> PolicyConfig:
     )
 
 
+def write_config(
+    project_root: Path,
+    updates: dict[str, object],
+    scope: str = "project",
+) -> Path:
+    """Merge ``updates`` into the target config layer and write to disk."""
+    target = GLOBAL_ROOT / "config.yaml" if scope == "global" else project_root / "config.yaml"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    current = _load_yaml_dict(target)
+    current.update({k: v for k, v in updates.items() if v is not None})
+    target.write_text(yaml.safe_dump(current, sort_keys=False))
+    return target
+
+
 def _load_yaml_dict(path: Path) -> dict[str, object]:
     if not path.exists():
         return {}

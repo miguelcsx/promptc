@@ -9,6 +9,7 @@ Invoked by ``promptc`` (no sub-command). Features:
 """
 from __future__ import annotations
 
+import difflib
 import os
 import traceback
 from pathlib import Path
@@ -23,6 +24,28 @@ from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.styles import Style
 
 from promptc.models import CompileRequest, OutputFormat
+
+# ─── Known providers ───────────────────────────────────────────────────────────
+
+_KNOWN_PROVIDERS: dict[str, tuple[str, str | None]] = {
+    "openai":    ("openai/gpt-4o-mini",                    "OPENAI_API_KEY"),
+    "anthropic": ("anthropic/claude-haiku-4-5-20251001",   "ANTHROPIC_API_KEY"),
+    "groq":      ("groq/llama3-8b-8192",                   "GROQ_API_KEY"),
+    "together":  ("together_ai/mistral-7b-instruct",       "TOGETHER_API_KEY"),
+    "mistral":   ("mistral/mistral-small-latest",          "MISTRAL_API_KEY"),
+    "cohere":    ("cohere/command-r",                      "COHERE_API_KEY"),
+    "ollama":    ("ollama/llama3",                         None),
+}
+
+# ─── Scalar config keys safe to persist via /config set ───────────────────────
+
+_SCALAR_CONFIG_KEYS = {
+    "provider", "model", "base_url", "api_key_env", "optimizer",
+    "temperature", "seed", "use_cache", "judge_count", "parallel_workers",
+    "max_retries", "rubric_version", "default_workflow_id", "default_profile_id",
+    "default_output_format", "default_variants", "default_max_iters",
+    "default_emit_tests", "default_show_metadata",
+}
 
 # ─── Slash-command registry ────────────────────────────────────────────────────
 
@@ -54,6 +77,7 @@ class _Session:
         self.workflow_id = workflow_id
         self.output_format = output_format
         self.overrides = dict(overrides)
+        self.context: str = ""  # optional context for next compile
         self._service: Any = None
         self._stale = True
 
@@ -83,18 +107,27 @@ class _Session:
         )
 
 
+# ─── Persistence helper ────────────────────────────────────────────────────────
+
+def _persist(s: _Session, updates: dict[str, object]) -> None:
+    from promptc.config import write_config
+    write_config(s.project_root, updates)
+
+
 # ─── Autocompleter ─────────────────────────────────────────────────────────────
 
 class _SlashCompleter(Completer):
     """Completes /<command> and their first argument where applicable."""
 
     _SUB_ARGS: dict[str, list[str]] = {
-        "profile":  ["list", "use", "show"],
-        "workflow": ["list", "use", "show"],
+        "profile":  ["list", "use", "show", "refine", "history"],
+        "workflow": ["list", "use", "show", "create", "validate"],
         "format":   [f.value for f in OutputFormat],
-        "artifacts":["list", "show"],
+        "artifacts":["list", "show", "diff", "lineage"],
         "cache":    ["clear"],
         "config":   ["show", "set"],
+        "provider": list(_KNOWN_PROVIDERS.keys()),
+        "context":  ["clear"],
     }
 
     def get_completions(self, document: Any, complete_event: Any):  # type: ignore[override]
@@ -186,7 +219,11 @@ def _cmd_config(args: str, s: _Session) -> None:
                     pass
         s.overrides[key] = value
         s.invalidate()
-        print(f"  set {key} = {value!r}")
+        if key in _SCALAR_CONFIG_KEYS:
+            _persist(s, {key: value})
+            print(f"  {key} = {value!r}  [saved]")
+        else:
+            print(f"  {key} = {value!r}  [session only]")
     else:
         _print_config(s)
 
@@ -194,19 +231,72 @@ def _cmd_config(args: str, s: _Session) -> None:
 def _print_config(s: _Session) -> None:
     rt = s.runtime()
     print()
-    print(f"  profile:   {s.profile_id}")
-    print(f"  workflow:  {s.workflow_id}")
-    print(f"  format:    {s.output_format.value}")
-    print(f"  provider:  {rt.provider}")
-    print(f"  model:     {rt.model}")
-    print(f"  variants:  {rt.default_variants}")
-    print(f"  iters:     {rt.default_max_iters}")
-    print(f"  cache:     {rt.use_cache}")
-    print(f"  root:      {s.project_root}")
+    print(f"  profile:     {s.profile_id}")
+    print(f"  workflow:    {s.workflow_id}")
+    print(f"  format:      {s.output_format.value}")
+    print(f"  provider:    {rt.provider}")
+    print(f"  model:       {rt.model}")
+    print(f"  base_url:    {rt.base_url or '(default)'}")
+    print(f"  api_key_env: {rt.api_key_env or '(default)'}")
+    print(f"  temperature: {rt.temperature}")
+    print(f"  variants:    {rt.default_variants}")
+    print(f"  iters:       {rt.default_max_iters}")
+    print(f"  optimizer:   {rt.optimizer}")
+    print(f"  cache:       {rt.use_cache}")
+    print(f"  root:        {s.project_root}")
     print()
 
 
-@_cmd("profile", "Manage profiles.  /profile [list | use <id> | show <id>]")
+@_cmd("provider", "Set LLM provider.  /provider [<name> [<API_KEY_ENV>]]")
+def _cmd_provider(args: str, s: _Session) -> None:
+    parts = args.strip().split(maxsplit=1)
+
+    if not parts or not parts[0]:
+        # List known providers, show current
+        rt = s.runtime()
+        print()
+        print(f"  current: {rt.provider}")
+        print()
+        print("  known providers:")
+        for name, (default_model, key_env) in _KNOWN_PROVIDERS.items():
+            marker = " *" if name == rt.provider else ""
+            key_hint = f"  (env: {key_env})" if key_env else "  (no API key needed)"
+            print(f"    {name:<12}{marker}  →  {default_model}{key_hint}")
+        print()
+        return
+
+    name = parts[0].lower()
+    api_key_env = parts[1].strip() if len(parts) > 1 else None
+
+    updates: dict[str, object] = {"provider": name}
+
+    if name in _KNOWN_PROVIDERS:
+        default_model, default_key_env = _KNOWN_PROVIDERS[name]
+        if api_key_env:
+            updates["api_key_env"] = api_key_env
+        elif default_key_env and not api_key_env:
+            # Use the default env var name for known providers
+            updates["api_key_env"] = default_key_env
+        if name == "ollama":
+            updates["base_url"] = "http://localhost:11434"
+        s.overrides.update(updates)
+        s.invalidate()
+        _persist(s, updates)
+        print(f"  provider → {name}  [saved]")
+        print(f"  hint: use /model {default_model}")
+        if name == "ollama":
+            print("  base_url → http://localhost:11434  [saved]")
+    else:
+        updates = {"provider": name}
+        if api_key_env:
+            updates["api_key_env"] = api_key_env
+        s.overrides.update(updates)
+        s.invalidate()
+        _persist(s, updates)
+        print(f"  provider → {name}  [saved]")
+
+
+@_cmd("profile", "Manage profiles.  /profile [list | use <id> | show <id> | refine <id> | history <id>]")
 def _cmd_profile(args: str, s: _Session) -> None:
     parts = args.strip().split(maxsplit=1)
     sub = (parts[0].lower() if parts else "list") or "list"
@@ -233,11 +323,43 @@ def _cmd_profile(args: str, s: _Session) -> None:
             print(yaml.safe_dump(prof.model_dump(mode="json"), sort_keys=False))
         except FileNotFoundError:
             print(f"  Profile not found: {pid!r}")
+    elif sub == "history":
+        pid = arg or s.profile_id
+        try:
+            from promptc.storage.fs import FsProfileRepo
+            repo = FsProfileRepo(s.project_root / "profiles")
+            versions = repo.list_versions(pid)
+            if not versions:
+                # Try service repo too
+                versions = s.service.profile_repo.list_versions(pid) if hasattr(s.service.profile_repo, "list_versions") else []
+            if not versions:
+                print(f"  No versioned history for {pid!r}")
+            else:
+                print(f"  {pid}: versions {versions}")
+        except Exception as exc:
+            print(f"  error: {exc}")
+    elif sub == "refine":
+        pid = arg or s.profile_id
+        try:
+            profile = s.service.profile_repo.get(pid)
+            workflow = s.service.workflow_repo.get(s.workflow_id)
+            refined = s.service.profile_engine.refine_profile(
+                profile=profile,
+                outcome=_make_pseudo_outcome(pid, workflow),
+                reasons=["manual refinement requested via TUI"],
+                workflow=workflow,
+            )
+            s.service.profile_repo.put(refined)
+            print(f"  profile {pid!r} refined → v{refined.version}  [saved]")
+        except Exception as exc:
+            print(f"  error: {exc}")
+            if os.environ.get("PROMPTC_DEBUG"):
+                traceback.print_exc()
     else:
-        print("  Usage: /profile [list | use <id> | show <id>]")
+        print("  Usage: /profile [list | use <id> | show <id> | refine <id> | history <id>]")
 
 
-@_cmd("workflow", "Manage workflows.  /workflow [list | use <id> | show <id>]")
+@_cmd("workflow", "Manage workflows.  /workflow [list | use <id> | show <id> | create <id> | validate <id>]")
 def _cmd_workflow(args: str, s: _Session) -> None:
     parts = args.strip().split(maxsplit=1)
     sub = (parts[0].lower() if parts else "list") or "list"
@@ -264,8 +386,35 @@ def _cmd_workflow(args: str, s: _Session) -> None:
             print(yaml.safe_dump(wf.model_dump(mode="json"), sort_keys=False))
         except FileNotFoundError:
             print(f"  Workflow not found: {wid!r}")
+    elif sub == "create":
+        if not arg:
+            print("  Usage: /workflow create <id>")
+            return
+        try:
+            template = s.service.workflow_repo.get("analyze")
+            new_wf = template.model_copy(deep=True)
+            new_wf.id = arg
+            s.service.workflow_repo.put(new_wf)
+            print(f"  workflow {arg!r} created from 'analyze' template  [saved]")
+        except FileNotFoundError:
+            print("  Template workflow 'analyze' not found — cannot clone")
+        except Exception as exc:
+            print(f"  error: {exc}")
+    elif sub == "validate":
+        wid = arg or s.workflow_id
+        try:
+            wf = s.service.workflow_repo.get(wid)
+            issues = s.service.workflow_engine.validate(wf)
+            if not issues:
+                print(f"  {wid}: ok")
+            else:
+                print(f"  {wid}: {len(issues)} issue(s)")
+                for issue in issues:
+                    print(f"    - {issue}")
+        except FileNotFoundError:
+            print(f"  Workflow not found: {wid!r}")
     else:
-        print("  Usage: /workflow [list | use <id> | show <id>]")
+        print("  Usage: /workflow [list | use <id> | show <id> | create <id> | validate <id>]")
 
 
 @_cmd("format", "Set output format.  /format [plain | chatml | json_schema]")
@@ -290,8 +439,14 @@ def _cmd_model(args: str, s: _Session) -> None:
         print(f"  model: {rt.model}  provider: {rt.provider}")
         return
     s.overrides["model"] = m
+    if "/" in m:
+        provider_hint = m.split("/")[0]
+        s.overrides["provider"] = provider_hint
+        _persist(s, {"model": m, "provider": provider_hint})
+    else:
+        _persist(s, {"model": m})
     s.invalidate()
-    print(f"  model → {m}")
+    print(f"  model → {m}  [saved]")
 
 
 @_cmd("variants", "Set number of prompt variants.  /variants <n>")
@@ -303,7 +458,8 @@ def _cmd_variants(args: str, s: _Session) -> None:
         return
     s.overrides["default_variants"] = n
     s.invalidate()
-    print(f"  variants → {n}")
+    _persist(s, {"default_variants": n})
+    print(f"  variants → {n}  [saved]")
 
 
 @_cmd("iters", "Set max optimisation iterations.  /iters <n>")
@@ -315,14 +471,33 @@ def _cmd_iters(args: str, s: _Session) -> None:
         return
     s.overrides["default_max_iters"] = n
     s.invalidate()
-    print(f"  iters → {n}")
+    _persist(s, {"default_max_iters": n})
+    print(f"  iters → {n}  [saved]")
 
 
-@_cmd("artifacts", "Browse compiled artifacts.  /artifacts [list | show <id>]")
+@_cmd("context", "Set compile context.  /context [<text> | clear]")
+def _cmd_context(args: str, s: _Session) -> None:
+    text = args.strip()
+    if not text:
+        if s.context:
+            print(f"  context: {s.context!r}")
+        else:
+            print("  context: (none)")
+        return
+    if text.lower() == "clear":
+        s.context = ""
+        print("  context cleared")
+    else:
+        s.context = text
+        print(f"  context set  [session only]")
+
+
+@_cmd("artifacts", "Browse compiled artifacts.  /artifacts [list | show <id> | diff <a> <b> | lineage <id>]")
 def _cmd_artifacts(args: str, s: _Session) -> None:
-    parts = args.strip().split(maxsplit=1)
+    parts = args.strip().split(maxsplit=2)
     sub = (parts[0].lower() if parts else "list") or "list"
     arg = parts[1].strip() if len(parts) > 1 else ""
+    arg2 = parts[2].strip() if len(parts) > 2 else ""
 
     if sub == "list":
         rows = s.service.artifact_repo.list_recent(20)
@@ -344,8 +519,44 @@ def _cmd_artifacts(args: str, s: _Session) -> None:
             print()
         except FileNotFoundError:
             print(f"  Artifact not found: {arg!r}")
+    elif sub == "diff":
+        if not arg or not arg2:
+            print("  Usage: /artifacts diff <id_a> <id_b>")
+            return
+        try:
+            a = s.service.artifact_repo.get(arg)
+            b = s.service.artifact_repo.get(arg2)
+            a_lines = a.prompt_final.splitlines(keepends=True)
+            b_lines = b.prompt_final.splitlines(keepends=True)
+            diff = list(difflib.unified_diff(
+                a_lines, b_lines,
+                fromfile=arg[:12],
+                tofile=arg2[:12],
+            ))
+            if not diff:
+                print("  (no differences)")
+            else:
+                print()
+                print("".join(diff))
+        except FileNotFoundError as exc:
+            print(f"  Artifact not found: {exc}")
+    elif sub == "lineage":
+        if not arg:
+            print("  Usage: /artifacts lineage <id>")
+            return
+        try:
+            chain = s.service.artifact_repo.lineage(arg)
+            if not chain:
+                print(f"  No lineage found for {arg!r}")
+            else:
+                for i, entry in enumerate(chain):
+                    prefix = "  " + ("└─ " if i == len(chain) - 1 else "├─ ")
+                    ts = entry.created_at.strftime("%Y-%m-%d %H:%M")
+                    print(f"{prefix}{entry.artifact_id[:12]}  {ts}")
+        except FileNotFoundError:
+            print(f"  Artifact not found: {arg!r}")
     else:
-        print("  Usage: /artifacts [list | show <id>]")
+        print("  Usage: /artifacts [list | show <id> | diff <a> <b> | lineage <id>]")
 
 
 @_cmd("cache", "Manage the compile cache.  /cache [clear]")
@@ -364,7 +575,7 @@ def _compile_intent(intent: str, s: _Session) -> None:
     rt = s.runtime()
     req = CompileRequest(
         intent=intent,
-        raw_context="",
+        raw_context=s.context,
         workflow_id=s.workflow_id,
         profile_id=s.profile_id,
         output_format=s.output_format,
@@ -383,6 +594,21 @@ def _compile_intent(intent: str, s: _Session) -> None:
     short = Path(artifact_path).name
     print(f"  [{artifact.artifact_id[:12]}] score={score:.3f}  {short}")
     print()
+
+
+# ─── Helpers ───────────────────────────────────────────────────────────────────
+
+def _make_pseudo_outcome(profile_id: str, workflow: Any) -> Any:
+    from promptc.engines.profile import outcome_from_workflow
+    from promptc.models import OutcomeSpec
+    return OutcomeSpec(
+        outcome_type=outcome_from_workflow(workflow.id),
+        objective=f"Refine profile {profile_id!r} for workflow {workflow.id!r}",
+        success_criteria=[],
+        assumptions=[],
+        constraints=[],
+        ambiguity_flags=[],
+    )
 
 
 # ─── Command dispatch ──────────────────────────────────────────────────────────
