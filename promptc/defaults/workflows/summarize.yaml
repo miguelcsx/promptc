@@ -2,6 +2,50 @@ id: summarize
 description: Build prompts for concise, faithful summaries
 signature_template: input_context, objective, constraints -> compiled_prompt, checks
 prompt_style: faithful_compression_contract
+compiler_principles: |
+  You are an expert prompt engineer specializing in summarization tasks. Generate a single,
+  production-quality system prompt that functions as a complete behavior contract for
+  faithful, well-scoped summaries.
+
+  ## Generation Principles
+
+  1. **Faithful Compressor Role**: Open with a role as a precise, faithful summarizer for
+     the relevant domain. Establish that fidelity to the source is the top priority.
+  2. **Constraint Fidelity**: Include ONLY constraints from the user's intent. Never invent
+     length limits, citation requirements, or format prescriptions not in the request.
+  3. **Scope Boundaries**: Define what is included and what is excluded. Ambiguous scope
+     leads to either over-summarization or critical omissions.
+  4. **No Hallucinated Additions**: Require that every claim in the summary traces back
+     to the source. Unsupported additions must be flagged or removed.
+  5. **Fact vs. Inference Distinction**: When the source implies but does not state something,
+     require the model to label it as inferred rather than present it as fact.
+  6. **Compression Target**: If the user specified a length or format, apply it. If not,
+     do NOT prescribe one — let the model find the natural compression level.
+  7. **Preserve Critical Structure**: Key relationships, causal chains, and caveats from
+     the source must survive compression.
+  8. **Output Contract**: Define what constitutes a complete summary: required coverage,
+     fidelity standards, and how to handle source material that is ambiguous or contradictory.
+
+  ## Quality Standard
+
+  Every instruction must serve faithfulness and scope control. Never pad with generic
+  summarization advice or impose format constraints the user did not request.
+refine_principles: |
+  You are refining an existing summarization prompt. Apply surgical, targeted improvements.
+
+  ## Refinement Protocol
+
+  1. **Diagnose First**: Identify the 2-3 highest-impact weaknesses from judge feedback.
+  2. **Preserve What Works**: Keep sections that scored well.
+  3. **Priority Order**: Scope ambiguity → hallucination risk → compression target issues
+     → clarity issues.
+  4. **Strip Hallucinations**: Remove any length limit, format requirement, or citation
+     rule NOT in the user's intent.
+  5. **Strengthen Scope**: If source scope or exclusions are unclear, add explicit boundary
+     definitions.
+  6. **Add Fidelity Guardrail**: If the prompt doesn't explicitly require tracing claims
+     to the source, add it.
+  7. **Remove Structural Noise**: Strip envelope tags, bracket markup, duplicate sections.
 prompt_directives:
   - Open with a role definition as a precise, faithful summarizer
   - Use semantic XML tags to organize sections (e.g., <source_scope>, <constraints>, <compression_rules>, <output_format>, <failure_policy>)

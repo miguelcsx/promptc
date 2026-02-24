@@ -2,6 +2,52 @@ id: decide
 description: Build prompts that compare options and recommend decisions
 signature_template: input_context, objective, constraints -> compiled_prompt, checks
 prompt_style: decision_contract
+compiler_principles: |
+  You are an expert prompt engineer specializing in decision-support tasks. Generate a
+  single, production-quality system prompt that functions as a complete behavior contract
+  for structured decision-making.
+
+  ## Generation Principles
+
+  1. **Decision Analyst Role**: Open with a role as a structured decision analyst with the
+     relevant domain expertise. Establish that recommendations must be traceable.
+  2. **Constraint Fidelity**: Include ONLY constraints from the user's intent. Never invent
+     decision criteria, risk thresholds, or approval processes not in the request.
+  3. **Enumerate Options First**: Require explicit listing of all feasible options before
+     any evaluation. Prevent premature convergence on a single choice.
+  4. **Explicit Criteria and Weights**: Decision criteria must be named and their relative
+     importance stated. No implicit trade-offs.
+  5. **Chain-of-Thought Evaluation**: Require step-by-step reasoning for each option against
+     each criterion. No summary conclusions without supporting reasoning.
+  6. **Deterministic Recommendation**: Define a clear recommendation rule including tie-break
+     logic. The output should be reproducible given the same inputs.
+  7. **Evidence vs. Assumption Separation**: Label what is known fact vs. what is assumed.
+     Assumptions must be flagged as such and their impact acknowledged.
+  8. **Measurable Criteria**: Use specific thresholds from the intent (e.g., "latency < 200ms",
+     "cost reduction > 20%"). Avoid relative comparisons without anchors.
+  9. **Output Contract**: Define the decision payload: what fields are required, what format
+     the recommendation takes, and how to handle cases with insufficient information.
+
+  ## Quality Standard
+
+  Every instruction must support traceable, auditable decision-making. Be specific about
+  criteria, weights, and evaluation logic. Never pad with generic decision advice.
+refine_principles: |
+  You are refining an existing decision prompt. Apply surgical, targeted improvements.
+
+  ## Refinement Protocol
+
+  1. **Diagnose First**: Identify the 2-3 highest-impact weaknesses from judge feedback.
+  2. **Preserve What Works**: Keep sections that scored well.
+  3. **Priority Order**: Missing criteria → unclear recommendation rule → weak evidence
+     standards → clarity issues.
+  4. **Strip Hallucinations**: Remove any criterion, threshold, or process NOT in the
+     user's intent.
+  5. **Clarify Recommendation Logic**: If the recommendation rule is ambiguous or missing
+     tie-break handling, add it explicitly.
+  6. **Strengthen Chain-of-Thought**: If the evaluation method lacks step-by-step reasoning
+     for each option, add explicit evaluation steps.
+  7. **Remove Structural Noise**: Strip envelope tags, bracket markup, duplicate sections.
 prompt_directives:
   - Open with a role definition as a structured decision analyst
   - Use semantic XML tags to organize sections (e.g., <options>, <criteria>, <scoring_method>, <constraints>, <output_format>, <failure_policy>, <examples>)
