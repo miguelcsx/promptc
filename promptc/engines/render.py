@@ -17,14 +17,9 @@ class OutputRenderer:
 
     def _chatml(self, prompt: str) -> str:
         return (
-            "<|start|>system\n"
-            "You are a capable AI assistant. Follow the compiled prompt below precisely. "
-            "Be thorough, accurate, and stay within the stated constraints. "
-            "If the prompt defines an output format, use it exactly.\n"
-            "<|end|>\n"
-            "<|start|>user\n"
+            "<|im_start|>system\n"
             f"{prompt.strip()}\n"
-            "<|end|>"
+            "<|im_end|>"
         )
 
     def _json_schema(self, prompt: str) -> str:

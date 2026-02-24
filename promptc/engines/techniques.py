@@ -10,6 +10,8 @@ def normalize_prompt_text(text: str) -> str:
         "<|user|>",
         "<|start|>",
         "<|end|>",
+        "<|im_start|>",
+        "<|im_end|>",
     }
     for raw in text.splitlines():
         line = raw.rstrip()
